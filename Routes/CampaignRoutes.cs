@@ -14,7 +14,7 @@ public static class CampaignRoutes
     {
         var campaignGroup = app.MapGroup("/camapigns");
 
-        campaignGroup.MapPost("/campaigns", async (
+        campaignGroup.MapPost("/", async (
             [FromBody] CreateCampaignDTO input,
             ApplicationDbContext _context
         ) =>
@@ -39,13 +39,13 @@ public static class CampaignRoutes
         })
         .WithName("create-campaigns");
 
-        campaignGroup.MapGet("/campaigns", async (ApplicationDbContext _context) =>
+        campaignGroup.MapGet("/", async (ApplicationDbContext _context) =>
         {
             return _context.Set<Campaign>().ToListAsync();
         })
         .WithName("get-campaigns");
 
-        campaignGroup.MapPut("/campaigns", async (
+        campaignGroup.MapPut("/", async (
             [FromBody] UpdateCampaignDTO input,
             ApplicationDbContext _context
         ) =>
@@ -69,7 +69,7 @@ public static class CampaignRoutes
 
         });
 
-        campaignGroup.MapDelete("/campaigns/{id}", async (ApplicationDbContext _context, string id) =>
+        campaignGroup.MapDelete("/{id}", async (ApplicationDbContext _context, string id) =>
         {
             var campaignFound = await _context.Set<Campaign>().FirstOrDefaultAsync(c => c.Id.ToString() == id.ToUpper());
             if (campaignFound == null) return Results.NotFound();
