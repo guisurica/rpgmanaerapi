@@ -1,0 +1,6 @@
+/appsettings.Development.json
+/bin
+/Properties
+/rpgmanager.db
+/rpgmanager.db-shm
+/rpgmanager.db-wal
