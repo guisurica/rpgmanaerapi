@@ -8,7 +8,7 @@ public sealed class PlayerCampaign : BaseModel
     public User User { get; private set; }
     public Guid CampaignId { get; private set; }
     public Campaign Campaign  { get; private set; }
-    public PlayerStatus PlayerStatus { get; private set; }
+    public PlayerStatus PlayerStatus { get; private set; } = PlayerStatus.COMMON;
 
     private PlayerCampaign() : base(string.Empty) { }
 
@@ -25,6 +25,16 @@ public sealed class PlayerCampaign : BaseModel
         var playerCampaign = new PlayerCampaign(name, userId, campaignId, user, campaign);
 
         return Result<PlayerCampaign>.Success("Player creatd successfully", 200, playerCampaign);
+    }
+
+    public void SetAdmin()
+    {
+        this.PlayerStatus = PlayerStatus.ADMIN;
+    }
+
+    public void SetCommon()
+    {
+        this.PlayerStatus = PlayerStatus.COMMON;
     }
 }
 

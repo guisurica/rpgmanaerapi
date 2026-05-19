@@ -54,6 +54,8 @@ public static class CampaignRoutes
                 campaign.Entity
             );
 
+            newCampaignPlayer.Data.SetAdmin();
+
             await _context.Set<PlayerCampaign>().AddAsync(newCampaignPlayer.Data);
 
             await _context.SaveChangesAsync();
