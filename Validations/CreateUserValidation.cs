@@ -8,27 +8,16 @@ public class CreateUserValidation : AbstractValidator<CreateUserDTO>
     public CreateUserValidation()
     {
         RuleFor(u => u.Email)
-            .EmailAddress()
-            .WithMessage("invalid email");
+            .NotEmpty().WithMessage("Email is required")
+            .EmailAddress().WithMessage("Invalid email");
 
         RuleFor(u => u.Username)
-            .Empty()
-            .WithMessage("Invalid username");
-
-        RuleFor(u => u.Username.Length)
-            .LessThan(128)
-            .WithMessage("Invalid username");
-
-        RuleFor(u => u.Username.Length)
-            .LessThan(128)
-            .WithMessage("invalid username");
+            .NotEmpty().WithMessage("Username is required")
+            .Length(3, 128).WithMessage("Username must be between 3 and 128 characters");
 
         RuleFor(u => u.Password)
-            .NotEqual(u => u.CPassword)
-            .WithMessage("Passwords doesnt match");
-
-        RuleFor(u => u.Password.Length)
-            .LessThan(255)
-            .WithMessage("Password is to long");
+            .NotEmpty().WithMessage("Password is required")
+            .MaximumLength(255).WithMessage("Password is too long")
+            .Equal(u => u.CPassword).WithMessage("Passwords don't match");
     }
 }

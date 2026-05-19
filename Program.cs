@@ -1,14 +1,35 @@
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using rpgmanagerapi.Data;
-using rpgmanagerapi.Data.DTOs;
-using rpgmanagerapi.Models;
-using rpgmanagerapi.Validations;
 using Scalar.AspNetCore;
 using Microsoft.OpenApi;
 using rpgmanagerapi.Routes;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+using rpgmanagerapi.Data.Config;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = "rpgmanager.com",
+            ValidAudience = "rpgmanager.com",
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JWT:Secret"]))
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+
+builder.Services.Configure<JWTConfig>(builder.Configuration.GetSection("JWT"));
+builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddOpenApi();
 
@@ -40,6 +61,10 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.CampaignEndpoints();
+app.AuthEndpoints();
 
 app.Run();

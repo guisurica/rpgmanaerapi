@@ -8,11 +8,11 @@ public class LoginUserValidation : AbstractValidator<LoginUserDTO>
     public LoginUserValidation()
     {
         RuleFor(u => u.Email)
-            .EmailAddress()
-            .WithMessage("invalid email");
+            .NotEmpty().WithMessage("Email is required")
+            .EmailAddress().WithMessage("invalid email");
 
         RuleFor(u => u.Password)
-            .Empty()
-            .WithMessage("invalid password");
+            .NotEmpty().WithMessage("password is required");
+            
     }
 }

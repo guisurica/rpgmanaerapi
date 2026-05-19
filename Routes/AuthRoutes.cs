@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using rpgmanagerapi.Data;
+using rpgmanagerapi.Data.Config;
 using rpgmanagerapi.Data.DTOs;
 using rpgmanagerapi.Models;
 using rpgmanagerapi.Validations;
@@ -13,9 +15,12 @@ public static class AuthRoutes
     {
         var authGroup = app.MapGroup("/auth");
 
+        authGroup.AllowAnonymous();
+
         authGroup.MapPost("/register", async (
             ApplicationDbContext _context,
-            [FromBody] CreateUserDTO input
+            [FromBody] CreateUserDTO input,
+            IOptions<JWTConfig> config
         ) =>
         {
             var createUserValidation = new CreateUserValidation();
@@ -31,16 +36,24 @@ public static class AuthRoutes
 
             var newUser = User.Create(input.Username, input.Email, input.Password);
 
-            await _context.Set<User>().AddAsync(newUser.Data);
+            var userEntity = await _context.Set<User>().AddAsync(newUser.Data);
 
             await _context.SaveChangesAsync();
 
-            return Results.Ok();
+            var token = userEntity.Entity.GenerateJwtToken(config.Value);
+
+            var userDTO = new UserDTO(userEntity.Entity.Email,
+            userEntity.Entity.Name,
+            userEntity.Entity.Id.ToString(),
+            token);
+
+            return Results.Ok(userDTO);
         });
 
         authGroup.MapPost("/login", async (
             ApplicationDbContext _context,
-            [FromBody] LoginUserDTO input
+            [FromBody] LoginUserDTO input,
+            IOptions<JWTConfig> config
         ) =>
         {
             var createUserValidation = new LoginUserValidation();
@@ -53,8 +66,15 @@ public static class AuthRoutes
 
             if (!userFound.VerifyPassword(input.Password))
                 return Results.BadRequest();
-            
-            return Results.Ok();
+
+            var token = userFound.GenerateJwtToken(config.Value);
+
+            var userDTO = new UserDTO(userFound.Email,
+            userFound.Name,
+            userFound.Id.ToString(),
+            token);
+
+            return Results.Ok(userDTO);
         });
     }
 }

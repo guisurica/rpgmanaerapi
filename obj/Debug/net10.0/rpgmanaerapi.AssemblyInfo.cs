@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("rpgmanaerapi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+688b58b89e3ae1d893b5c3617cbed299b8ca1493")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+659486ceef4c3e320a729f19f65eaebe324fece5")]
 [assembly: System.Reflection.AssemblyProductAttribute("rpgmanaerapi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("rpgmanaerapi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

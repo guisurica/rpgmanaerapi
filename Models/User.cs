@@ -1,5 +1,10 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
 using rpgmanagerapi.Common;
+using rpgmanagerapi.Data.Config;
 
 namespace rpgmanagerapi.Models;
 
@@ -39,6 +44,28 @@ public sealed class User : BaseModel
         if (verified != PasswordVerificationResult.Success) return false;
 
         return true;
+    }
+
+    public string GenerateJwtToken(JWTConfig config)
+    {
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, this.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Name, this.Name),
+            new Claim(JwtRegisteredClaimNames.Email, this.Email)
+        };
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config.Secret));
+        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: "rpgmanager.com",
+            audience: "rpgmanager.com",
+            claims: claims,
+            expires: DateTime.Now.AddMinutes(30),
+            signingCredentials: creds);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
 }
