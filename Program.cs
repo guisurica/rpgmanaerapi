@@ -64,7 +64,8 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.CampaignEndpoints();
-app.AuthEndpoints();
+app.MapCampaignRoutes();
+app.MapAuthRoutes();
+app.MapReportRoutes();
 
 app.Run();

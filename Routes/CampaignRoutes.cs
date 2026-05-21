@@ -1,109 +1,252 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using rpgmanagerapi.Common;
 using rpgmanagerapi.Data;
 using rpgmanagerapi.Data.DTOs;
 using rpgmanagerapi.Models;
 using rpgmanagerapi.Validations;
-using Scalar.AspNetCore;
 
 namespace rpgmanagerapi.Routes;
 
 public static class CampaignRoutes
 {
-    public static void CampaignEndpoints(this WebApplication app)
+    public static void MapCampaignRoutes(this WebApplication app)
     {
-        var campaignGroup = app.MapGroup("/campaigns");
+        var campaignGroup = app.MapGroup("/campaigns")
+            .RequireAuthorization();
 
-        campaignGroup.RequireAuthorization();
+        campaignGroup.MapPost("/", CreateCampaignAsync).WithName("create-campaigns");
+        campaignGroup.MapGet("/", GetCampaignsAsync).WithName("get-campaigns");
+        campaignGroup.MapPut("/", UpdateCampaignAsync);
+        campaignGroup.MapDelete("/{id}", DeleteCampaignAsync);
 
-        campaignGroup.MapPost("/", async (
-            [FromBody] CreateCampaignDTO input,
-            ApplicationDbContext _context,
-            IHttpContextAccessor _httpContext
-        ) =>
+        campaignGroup.MapPost("/invites", CreateInviteAsync);
+        campaignGroup.MapGet("/invites", GetInvitesAsync).WithName("get-invites");
+        campaignGroup.MapPut("/invites/{inviteId}", AcceptInviteAsync).WithName("accept-invites");
+    }
+
+    private static async Task<IResult> CreateCampaignAsync(
+        [FromBody] CreateCampaignDTO input,
+        ApplicationDbContext _context,
+        IHttpContextAccessor _httpContext)
+    {
+        var userId = _httpContext.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+
+        if (userId?.Value == null)
+            return Results.Unauthorized();
+
+        var createCampaignValidator = new CreateCampaignValidation();
+        var validateDTO = createCampaignValidator.Validate(input);
+
+        if (!validateDTO.IsValid)
+            return Results.BadRequest(validateDTO.Errors.FirstOrDefault()?.ErrorMessage);
+
+        var userFound = await _context.Set<User>().FirstOrDefaultAsync(c => c.Id == new Guid(userId.Value));
+        if (userFound == null)
+            return Results.NotFound("Usuário não encontrado");
+
+        var newCampaign = Campaign.CreateCampaign(input.Name, input.Description, input.system, new Guid(userId.Value));
+
+        var campaign = await _context.AddAsync(newCampaign.Data);
+
+        var newCampaignPlayer = PlayerCampaign.Create(
+            userFound.Name,
+            userFound.Id,
+            newCampaign.Data.Id,
+            userFound,
+            campaign.Entity);
+
+        newCampaignPlayer.Data.SetAdmin();
+
+        await _context.Set<PlayerCampaign>().AddAsync(newCampaignPlayer.Data);
+        await _context.SaveChangesAsync();
+
+        return Results.Ok(newCampaign);
+    }
+
+    private static async Task<IResult> GetCampaignsAsync(
+        ApplicationDbContext _context,
+        IHttpContextAccessor _httpContext)
+    {
+        var userId = _httpContext.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+
+        if (userId?.Value == null)
+            return Results.Unauthorized();
+
+        var userCampaigns = await _context.Set<PlayerCampaign>()
+            .Include(pc => pc.Campaign)
+            .Include(pc => pc.User)
+            .AsNoTracking()
+            .Where(p => p.UserId == new Guid(userId.Value))
+            .ToListAsync();
+
+        var userPcs = new List<PlayerCampaignDTO>();
+
+        foreach (var userPc in userCampaigns)
         {
-            var userId = _httpContext.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+            var campaignMasterFound = await _context.Set<User>()
+                .FirstOrDefaultAsync(u => u.Id == userPc.Campaign.CampaignMaster);
 
-            if (userId.Value == null)
-                return Results.Unauthorized();
+            if (campaignMasterFound == null) continue;
 
-            var createCampaignValidator = new CreateCampaignValidation();
+            userPcs.Add(new PlayerCampaignDTO(
+                userPc.Campaign.Name,
+                userPc.Campaign.Description,
+                userPc.Campaign.GameSystem,
+                campaignMasterFound.Name,
+                userPc.Campaign.CreatedOnUtc,
+                userPc.Campaign.Id.ToString()
+            ));
+        }
 
-            var validateDTO = createCampaignValidator.Validate(input);
+        return Results.Ok(userPcs);
+    }
 
-            if (!validateDTO.IsValid)
-            {
-                return Results.BadRequest(validateDTO.Errors.FirstOrDefault().ErrorMessage);
-            }
+    private static async Task<IResult> UpdateCampaignAsync(
+        [FromBody] UpdateCampaignDTO input,
+        ApplicationDbContext _context)
+    {
+        var updateCampaignValidator = new UpdateCampaignValidation();
+        var validateDTO = updateCampaignValidator.Validate(input);
 
-            var userFound = await _context.Set<User>().FirstOrDefaultAsync(c => c.Id == new Guid(userId.Value));
-            if (userFound == null)
-                return Results.NotFound();
+        if (!validateDTO.IsValid)
+            return Results.BadRequest(validateDTO.Errors.FirstOrDefault()?.ErrorMessage);
 
-            var newCampaign = Campaign
-                .CreateCampaign(input.Name, input.Description, input.system, new Guid(userId.Value));
+        var campaignFound = await _context.Set<Campaign>()
+            .FirstOrDefaultAsync(c => c.Id.ToString() == input.Id.ToUpper());
 
-            var campaign = await _context.AddAsync(newCampaign.Data);
+        if (campaignFound == null)
+            return Results.NotFound("Campanha não encontrada");
 
-            var newCampaignPlayer = PlayerCampaign.Create(userFound.Name,
-                userFound.Id,
-                newCampaign.Data.Id,
-                userFound,
-                campaign.Entity
-            );
+        campaignFound.UpdateCampaign(input.Name, input.Description);
 
-            newCampaignPlayer.Data.SetAdmin();
+        _context.Set<Campaign>().Update(campaignFound);
+        await _context.SaveChangesAsync();
 
-            await _context.Set<PlayerCampaign>().AddAsync(newCampaignPlayer.Data);
+        return Results.Ok(campaignFound);
+    }
 
-            await _context.SaveChangesAsync();
+    private static async Task<IResult> DeleteCampaignAsync(
+        string id,
+        ApplicationDbContext _context)
+    {
+        var campaignFound = await _context.Set<Campaign>()
+            .FirstOrDefaultAsync(c => c.Id.ToString() == id.ToUpper());
 
-            return Results.Ok(newCampaign);
-        })
-        .WithName("create-campaigns");
+        if (campaignFound == null)
+            return Results.NotFound("Campanha não encontrada");
 
-        campaignGroup.MapGet("/{userId}", async (ApplicationDbContext _context, string userId) =>
-        {
-            return _context.Set<PlayerCampaign>().Where(p => p.UserId == new Guid(userId)).ToListAsync();
-        })
-        .WithName("get-campaigns");
+        _context.Set<Campaign>().Remove(campaignFound);
+        await _context.SaveChangesAsync();
 
-        campaignGroup.MapPut("/", async (
-            [FromBody] UpdateCampaignDTO input,
-            ApplicationDbContext _context
-        ) =>
-        {
-            var updateCampaignValidator = new UpdateCampaignValidation();
+        return Results.Ok();
+    }
 
-            var validateDTO = updateCampaignValidator.Validate(input);
+    private static async Task<IResult> CreateInviteAsync(
+        [FromBody] CreateInviteDTO input,
+        IHttpContextAccessor _httpContext,
+        ApplicationDbContext _context)
+    {
+        var inviteValidation = new CreateInviteValidation();
+        var inputValidate = inviteValidation.Validate(input);
 
-            if (!validateDTO.IsValid) return Results.BadRequest(validateDTO.Errors.FirstOrDefault().ErrorMessage);
+        if (!inputValidate.IsValid)
+            return Results.BadRequest(inputValidate.Errors.FirstOrDefault()?.ErrorMessage);
 
-            var campaignFound = await _context.Set<Campaign>().FirstOrDefaultAsync(c => c.Id.ToString() == input.Id.ToUpper());
-            if (campaignFound == null) return Results.NotFound();
+        var userId = _httpContext.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
 
-            campaignFound.UpdateCampaign(input.Name, input.Description);
+        if (userId?.Value == null)
+            return Results.Unauthorized();
 
-            _context.Set<Campaign>().Update(campaignFound);
+        var userFound = await _context.Set<User>().FirstOrDefaultAsync(u => u.Id == new Guid(userId.Value));
+        if (userFound == null)
+            return Results.NotFound("Usuário não encontrado");
 
-            await _context.SaveChangesAsync();
+        var userMasterCampaign = await _context.Set<PlayerCampaign>()
+            .FirstOrDefaultAsync(pc => pc.UserId == new Guid(userId.Value));
 
-            return Results.Ok(campaignFound);
+        if (userMasterCampaign == null)
+            return Results.NotFound("Usuário não encontrado na campanha");
 
-        });
+        if (userMasterCampaign.PlayerStatus != PlayerStatus.ADMIN)
+            return Results.Forbid();
 
-        campaignGroup.MapDelete("/{id}", async (ApplicationDbContext _context, string id) =>
-        {
-            var campaignFound = await _context.Set<Campaign>().FirstOrDefaultAsync(c => c.Id.ToString() == id.ToUpper());
-            if (campaignFound == null) return Results.NotFound();
+        var campaignFound = await _context.Set<Campaign>()
+            .FirstOrDefaultAsync(c => c.Id == new Guid(input.campaignId));
 
-            _context.Set<Campaign>().Remove(campaignFound);
+        if (campaignFound == null)
+            return Results.NotFound("Campanha não encontrada");
 
-            await _context.SaveChangesAsync();
+        var userInviteReceived = await _context.Set<User>()
+            .FirstOrDefaultAsync(u => u.Name == input.userWantInviteUsername);
 
-            return Results.Ok();
-        });
+        if (userInviteReceived == null)
+            return Results.NotFound("Usuário convidado não encontrado");
+
+        var newInvite = Invite.Create(
+            campaignFound.Name + " - Invite " + userInviteReceived.Name,
+            userInviteReceived.Id,
+            campaignFound.Id,
+            userInviteReceived,
+            campaignFound);
+
+        await _context.Set<Invite>().AddAsync(newInvite.Data);
+        await _context.SaveChangesAsync();
+
+        return Results.Ok("Convite enviado com sucesso");
+    }
+
+    private static async Task<IResult> GetInvitesAsync(
+        ApplicationDbContext _context,
+        IHttpContextAccessor _httpContext)
+    {
+        var userId = _httpContext.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+
+        if (userId?.Value == null)
+            return Results.Unauthorized();
+
+        var invites = await _context.Set<Invite>()
+            .Where(i => i.UserId == new Guid(userId.Value) && !i.IsAccepted)
+            .ToListAsync();
+
+        return Results.Ok(invites);
+    }
+
+    private static async Task<IResult> AcceptInviteAsync(
+        string inviteId,
+        ApplicationDbContext _context,
+        IHttpContextAccessor _httpContext)
+    {
+        var userId = _httpContext.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+
+        if (userId?.Value == null)
+            return Results.Unauthorized();
+
+        if (string.IsNullOrEmpty(inviteId))
+            return Results.NotFound("Convite não encontrado");
+
+        var inviteFound = await _context.Set<Invite>()
+            .Include(i => i.User)
+            .Include(i => i.Campaign)
+            .FirstOrDefaultAsync(i => i.Id == new Guid(inviteId));
+
+        if (inviteFound == null)
+            return Results.NotFound("Convite não encontrado");
+
+        inviteFound.Accept();
+
+        var newCampaignPlayer = PlayerCampaign.Create(
+            inviteFound.User.Name,
+            inviteFound.User.Id,
+            inviteFound.Campaign.Id,
+            inviteFound.User,
+            inviteFound.Campaign);
+
+        newCampaignPlayer.Data.SetCommon();
+
+        await _context.Set<PlayerCampaign>().AddAsync(newCampaignPlayer.Data);
+        await _context.SaveChangesAsync();
+
+        return Results.Ok("Convite aceito com sucesso, a campanha aparecerá na sua lista de campanhas");
     }
 }

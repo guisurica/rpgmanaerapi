@@ -5,9 +5,9 @@ namespace rpgmanagerapi.Models;
 public sealed class Campaign : BaseModel
 {
     public string Description { get; private set; }
-    public List<PlayerCampaign> Players { get; private set; }
     public string GameSystem { get; private set; }
     public Guid CampaignMaster { get; private set; }
+    public List<Report> Reports { get; private set; }
 
     private Campaign() : base(string.Empty){ }
 
@@ -17,6 +17,7 @@ public sealed class Campaign : BaseModel
         Description = description;
         GameSystem = system;
         CampaignMaster = cm;
+        Reports = new List<Report>();
     }
 
 

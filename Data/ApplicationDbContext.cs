@@ -8,6 +8,7 @@ public sealed class ApplicationDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Campaign> Campaigns { get; set; }
     public DbSet<PlayerCampaign> PlayerCampaigns { get; set; }
+    public DbSet<Invite> Invites { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options) { }
@@ -20,6 +21,9 @@ public sealed class ApplicationDbContext : DbContext
             .ToTable("users");
         modelBuilder.Entity<PlayerCampaign>()
             .ToTable("user_campaign");
+        modelBuilder.Entity<Invite>()
+            .ToTable("invites");
+
 
         base.OnModelCreating(modelBuilder);
     }
